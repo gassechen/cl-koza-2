@@ -15,16 +15,18 @@ The `cl-koza-ii` system is self-contained and does not depend on `gp`.
 
 ### Status
 
-Phase 1 is complete:
+Phase 3 is complete:
 
-- ADF kernel with a fixed architecture of **ADF0 + ADF1 + RPB**
-  (result-producing branch).
-- Example problem: **even-5-parity**.
+- ADF kernel with an arbitrary architecture of
+  **ADF0 … ADF(N-1) + RPB** (result-producing branch), where `N >= 0`.
+  With `N = 0`, a program consists only of the result-producing branch.
+- The legacy two-ADF program API and `run-genetic-programming-system`
+  remain supported as compatibility layers.
+- Generic tree interpreter with explicit terminal environments and no
+  dependency on dynamically bound ADF variables.
+- Examples: **even-5-parity** with two ADFs and **even-5-parity-3-adfs**
+  with three hierarchical ADFs.
 - FiveAM test suite integrated with ASDF.
-
-The number of ADFs is currently fixed at two. Generalizing to an arbitrary
-number of ADFs (`ADF0 … ADF(N-1) + RPB`) is the next phase; see the roadmap
-below.
 
 ### Requirements
 
@@ -83,33 +85,78 @@ The same run can be started directly with `run`:
 (cl-koza-ii.examples.even-5-parity:run 51 4000 1.0 :verbose t)
 ```
 
+The three-ADF version uses the generalized `run-adf-system` entry point:
+
+```lisp
+(asdf:load-system "cl-koza-ii/examples/even-5-parity-3-adfs")
+
+(cl-koza-ii.examples.even-5-parity-3-adfs:verify-known-program)
+
+(cl-koza-ii.examples.even-5-parity-3-adfs:run-example
+ :maximum-generations 1
+ :size-of-population 8
+ :seed 1.0)
+```
+
 ### Architecture
 
-An overall program is an `adf-program` with three branches:
+An overall program is an `adf-program` with `N` automatically defined
+function branches followed by the result-producing branch:
 
 | Branch | Purpose |
 | --- | --- |
-| `ADF0` | First automatically defined function |
-| `ADF1` | Second automatically defined function |
-| `RPB`  | Result-producing branch, the program's output |
+| `ADF0 … ADF(N-1)` | Automatically defined functions |
+| `RPB` | Result-producing branch, the program's output |
 
-The kernel does not restrict which ADF a branch calls; that is determined by
-the problem's function sets. In the even-5-parity example, ADF0 and ADF1
-each take three arguments (`ARG0`, `ARG1`, `ARG2`), ADF1 may call ADF0, and
-the result-producing branch may call both ADFs. ADF0 does not call another
-ADF.
+`N` may be zero, in which case the program contains only `RPB`. The kernel
+does not restrict which ADF a branch calls; that is determined by the
+problem's function sets. In the original even-5-parity example, there are two
+ADFs. ADF0 and ADF1 each take three arguments (`ARG0`, `ARG1`, `ARG2`), ADF1
+may call ADF0, and the result-producing branch may call both ADFs. ADF0 does
+not call another ADF. The three-ADF example adds ADF2, which may call ADF0
+and ADF1, and lets the result-producing branch call all three ADFs.
 
 The main program operations are exported from `cl-koza-ii.program`:
 
-- `make-adf-program`, `adf-program-adf0`, `adf-program-adf1`,
-  `adf-program-rpb`
-- `branch-names`, `program-branch`, `replace-program-branch`,
-  `map-program-branches`
+- `make-adf-program`, `adf-program-adfs`, `adf-program-adf`,
+  `adf-program-branch-count`, `adf-program-rpb`
+- Legacy accessors: `adf-program-adf0`, `adf-program-adf1`
+- `branch-index`, `branch-names`, `program-branch`,
+  `replace-program-branch`, `map-program-branches`
 - `copy-individual-substituting-branch`
 - `count-crossover-points`, `count-function-points`, `max-depth-of-tree`
 - `get-subtree`, `get-function-subtree`
 
-The kernel entry point is exported from `cl-koza-ii`:
+`make-adf-program` accepts `:adfs` (a list of branch bodies) together with
+`:rpb`. The legacy keywords `:adf0` and `:adf1` remain supported when
+`:adfs` is omitted; calling it with no arguments still creates a program with
+two `NIL` ADFs.
+
+The generic tree interpreter is exported from `cl-koza-ii.interpreter` and
+re-exported from `cl-koza-ii`:
+
+- `evaluate-adf-program` evaluates the result-producing branch.
+- `evaluate-adf-branch` evaluates a selected branch.
+- `evaluate-adf-tree` evaluates an arbitrary tree in the context of a
+  program.
+
+Each evaluator accepts an `:environment` alist of terminal or argument
+bindings. ADF calls are resolved against the program's branch vector, so the
+interpreter does not use dynamically bound ADF variables. It supports
+`AND`, `OR`, `IF`, and `PROGN` as special forms and calls other symbols as
+Common Lisp functions.
+
+The generalized kernel entry point is exported from `cl-koza-ii`:
+
+```lisp
+(run-adf-system problem-function
+                seed
+                maximum-generations
+                size-of-population
+                &rest seeded-programs)
+```
+
+The legacy entry point remains available:
 
 ```lisp
 (run-genetic-programming-system problem-function
@@ -121,7 +168,29 @@ The kernel entry point is exported from `cl-koza-ii`:
 
 #### Problem-function contract
 
-`problem-function` must return ten values:
+`run-adf-system` expects `problem-function` to return six values:
+
+1. A list of branch specs for `ADF0 … ADF(N-1)`
+2. A branch spec for the result-producing branch
+3. Fitness-cases creator
+4. Fitness function
+5. Parameter definer
+6. Termination predicate
+
+A branch spec is created with:
+
+```lisp
+(make-branch-spec :function-set-creator #'creator
+                  :terminal-set-creator #'creator)
+```
+
+The length of the first value determines the number of ADFs. `NIL` creates a
+program with no ADFs. The fitness function receives an `adf-program` and the
+fitness cases, and returns two values: the standardized fitness and the
+number of hits.
+
+`run-genetic-programming-system` is the compatibility wrapper for the
+legacy two-ADF contract. Its `problem-function` returns ten values:
 
 1. ADF0 function-set creator
 2. ADF1 function-set creator
@@ -136,9 +205,7 @@ The kernel entry point is exported from `cl-koza-ii`:
 
 A function-set creator returns two values: the function set and its argument
 map (the number of arguments expected by each function). A terminal-set
-creator returns the terminal set. The fitness function receives an
-`adf-program` and the fitness cases, and returns two values: the
-standardized fitness and the number of hits.
+creator returns the terminal set.
 
 The parameter definer sets the kernel's dynamic variables, including:
 
@@ -153,8 +220,10 @@ The parameter definer sets the kernel's dynamic variables, including:
 - `*method-of-generation*`
 - `*verbose*`
 
-Fitness evaluation is sequential because the automatically defined functions
-rely on dynamically bound special variables and are not thread-safe.
+Fitness evaluation in the legacy two-ADF example is sequential because its
+evaluator relies on dynamically bound special variables and is not
+thread-safe. The generic interpreter uses explicit environments and does not
+depend on those dynamic variables.
 
 ### Example: even-5-parity
 
@@ -180,6 +249,37 @@ by the book. Its known correct program is:
 Known program: standardized-fitness=0 hits=32
 ```
 
+### Example: even-5-parity with three ADFs
+
+The `even-5-parity-3-adfs` example keeps the same fitness cases and Boolean
+function sets, but uses a hierarchical three-ADF architecture: ADF2 may call
+ADF0 and ADF1, and the result-producing branch may call all three ADFs. Its
+known correct program reuses the two-ADF solution and wraps the original
+ADF1 call through ADF2:
+
+```lisp
+(make-adf-program
+ :adfs (list
+        '(or (and arg0 arg1)
+             (and (nand arg0 arg0) (nand arg1 arg1)))
+        '(nand (or (and arg0 arg1)
+                   (and (nand arg0 arg0) (nand arg1 arg1)))
+               (or (and arg0 arg1)
+                   (and (nand arg0 arg0) (nand arg1 arg1))))
+        '(adf1 arg0 arg1 arg2))
+ :rpb '(adf2 (adf0 (adf0 d0 d1 d0) (adf0 d2 d3 d0) d0)
+             d4 d0))
+```
+
+`verify-known-program` reports:
+
+```text
+Known program: standardized-fitness=0.0 hits=32
+```
+
+The example uses the generic `run-adf-system` entry point and the
+`evaluate-adf-program` interpreter.
+
 ### Tests
 
 The test suite uses FiveAM and is registered as `cl-koza-ii/tests`:
@@ -191,7 +291,7 @@ The test suite uses FiveAM and is registered as `cl-koza-ii/tests`:
 At the time of writing the suite reports:
 
 ```text
-Pass: 2807 (99%)
+Pass: 2936 (99%)
 Skip: 2 ( 0%)
 Fail: 0 ( 0%)
 ```
@@ -208,12 +308,14 @@ The two skipped tests document known issues:
 
 - **Phase 1 (done):** kernel with ADF0, ADF1 and RPB; even-5-parity example;
   FiveAM test suite.
-- **Phase 2 (planned):** generalize the program representation, problem
-  contract, and kernel to an arbitrary number of ADFs
-  (`ADF0 … ADF(N-1) + RPB`), while keeping the current two-ADF API as a
-  compatibility layer.
-- **Phase 3 (planned):** add an N-ADF example and extend the test suite to
-  cover one, three, and four ADFs.
+- **Phase 2 (done):** generalized program representation, problem contract,
+  and kernel to an arbitrary number of ADFs (`ADF0 … ADF(N-1) + RPB`,
+  including `N = 0`), while keeping the two-ADF API as a compatibility
+  layer. Kernel tests cover zero, one, two, three, and four ADFs.
+- **Phase 3 (done):** generic tree interpreter with explicit environments and
+  an even-5-parity example with three hierarchical ADFs.
+- **Future work:** more N-ADF examples, architecture-selection experiments,
+  and optional parallel fitness evaluation.
 
 ### Project layout
 
@@ -232,6 +334,9 @@ doc/                    Koza II reference material
   Programs*.
 - The reference PDF is available at
   `doc/koza_jr_ed_genetic_programming_ii_automatic_discovery_of_reu.pdf`.
+- Multiple function-defining branches: section 6.7.
+- Retrospective even-5-parity architecture experiments, including three-ADF
+  architectures: section 7.4.
 - Koza's Little Lisp: <http://www.genetic-programming.org/gplittlelisp.html>
 
 ## Legacy Koza I (`gp`)

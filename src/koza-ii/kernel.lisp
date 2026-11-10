@@ -52,6 +52,66 @@
   (normalized-fitness 0)
   (hits 0))
 
+(defstruct branch-spec
+  function-set-creator
+  terminal-set-creator)
+
+(defstruct resolved-branch
+  function-set
+  argument-map
+  terminal-set
+  terminal-set-creator)
+
+(defun funcallable-designator-p (object)
+  (or (functionp object)
+      (and (symbolp object) (fboundp object))))
+
+(defun validate-run-arguments (problem-function
+                               seed
+                               maximum-generations
+                               size-of-population)
+  (assert (and (integerp maximum-generations)
+               (not (minusp maximum-generations)))
+          (maximum-generations)
+          "Maximum-generations must be a non-negative integer, not ~S"
+          maximum-generations)
+  (assert (and (integerp size-of-population)
+               (plusp size-of-population))
+          (size-of-population)
+          "Size-Of-Population must be a positive integer, not ~S"
+          size-of-population)
+  (assert (funcallable-designator-p problem-function)
+          (problem-function)
+          "Problem-Function must be a function.")
+  (assert (numberp seed) (seed)
+          "The randomizer seed must be a number."))
+
+(defun initialize-run (seed)
+  (setf *seed* (coerce seed 'double-float))
+  (setf *generation-of-best-of-run-individual* 0)
+  (setf *best-of-run-individual* nil))
+
+(defun validate-branch-spec (spec description)
+  (unless (branch-spec-p spec)
+    (error "~A must be a BRANCH-SPEC, not ~S." description spec))
+  (unless (funcallable-designator-p
+           (branch-spec-function-set-creator spec))
+    (error "~A function-set creator must be a function designator."
+           description))
+  (unless (funcallable-designator-p
+           (branch-spec-terminal-set-creator spec))
+    (error "~A terminal-set creator must be a function designator."
+           description))
+  spec)
+
+(defun validate-branch-specs (adf-specs rpb-spec)
+  (unless (listp adf-specs)
+    (error "ADF specs must be a list, not ~S." adf-specs))
+  (loop for spec in adf-specs
+        for index from 0
+        do (validate-branch-spec spec (format nil "ADF~D" index)))
+  (validate-branch-spec rpb-spec "RPB"))
+
 (defun run-genetic-programming-system (problem-function
                                        seed
                                        maximum-generations
@@ -75,26 +135,11 @@
    associated argument map.  The fitness function receives an
    ADF-PROGRAM and the fitness cases and returns two values: the
    standardized fitness and the number of hits."
-  (assert (and (integerp maximum-generations)
-               (not (minusp maximum-generations)))
-          (maximum-generations)
-          "Maximum-generations must be a non-negative integer, not ~S"
-          maximum-generations)
-  (assert (and (integerp size-of-population)
-               (plusp size-of-population))
-          (size-of-population)
-          "Size-Of-Population must be a positive integer, not ~S"
-          size-of-population)
-  (assert (or (and (symbolp problem-function)
-                   (fboundp problem-function))
-              (functionp problem-function))
-          (problem-function)
-          "Problem-Function must be a function.")
-  (assert (numberp seed) (seed)
-          "The randomizer seed must be a number.")
-  (setf *seed* (coerce seed 'double-float))
-  (setf *generation-of-best-of-run-individual* 0)
-  (setf *best-of-run-individual* nil)
+  (validate-run-arguments problem-function
+                          seed
+                          maximum-generations
+                          size-of-population)
+  (initialize-run seed)
   (multiple-value-bind (adf0-function-set-creator
                         adf1-function-set-creator
                         rpb-function-set-creator
@@ -106,43 +151,121 @@
                         parameter-definer
                         termination-predicate)
       (funcall problem-function)
-    (multiple-value-bind (adf0-function-set adf0-argument-map)
-        (funcall adf0-function-set-creator)
-      (multiple-value-bind (adf1-function-set adf1-argument-map)
-          (funcall adf1-function-set-creator)
-        (multiple-value-bind (rpb-function-set rpb-argument-map)
-            (funcall rpb-function-set-creator)
-          (funcall parameter-definer)
-          (describe-parameters-for-run maximum-generations
-                                       size-of-population)
-          (let ((adf0-terminal-set (funcall adf0-terminal-set-creator))
-                (adf1-terminal-set (funcall adf1-terminal-set-creator))
-                (rpb-terminal-set (funcall rpb-terminal-set-creator)))
-            (let ((population
-                    (create-population size-of-population
-                                       adf0-function-set adf0-argument-map
-                                       adf0-terminal-set
-                                       adf1-function-set adf1-argument-map
-                                       adf1-terminal-set
-                                       rpb-function-set rpb-argument-map
-                                       rpb-terminal-set
-                                       seeded-programs)))
-              (let ((fitness-cases (funcall fitness-cases-creator))
-                    (new-programs (make-array size-of-population)))
-                (execute-generations population
-                                     new-programs
-                                     fitness-cases
-                                     maximum-generations
-                                     fitness-function
-                                     termination-predicate
-                                     adf0-function-set adf0-argument-map
-                                     adf0-terminal-set
-                                     adf1-function-set adf1-argument-map
-                                     adf1-terminal-set
-                                     rpb-function-set rpb-argument-map
-                                     rpb-terminal-set)
-                (report-on-run)
-                (values population fitness-cases)))))))))
+    (run-system
+     (list (make-branch-spec
+            :function-set-creator adf0-function-set-creator
+            :terminal-set-creator adf0-terminal-set-creator)
+           (make-branch-spec
+            :function-set-creator adf1-function-set-creator
+            :terminal-set-creator adf1-terminal-set-creator))
+     (make-branch-spec
+      :function-set-creator rpb-function-set-creator
+      :terminal-set-creator rpb-terminal-set-creator)
+     maximum-generations
+     size-of-population
+     seeded-programs
+     fitness-cases-creator
+     fitness-function
+     parameter-definer
+     termination-predicate)))
+
+(defun run-adf-system (problem-function
+                       seed
+                       maximum-generations
+                       size-of-population
+                       &rest seeded-programs)
+  "Runs the genetic programming system with an arbitrary number of ADFs.
+
+   PROBLEM-FUNCTION must return six values:
+
+     1. a list of BRANCH-SPEC objects for ADF0 ... ADF(N-1)
+     2. a BRANCH-SPEC object for the result-producing branch
+     3. creator of the fitness cases
+     4. fitness function
+     5. parameter definer
+     6. termination predicate
+
+   The number of ADFs is the length of the first value.  A NIL first
+   value creates a program with no ADFs, only the result-producing
+   branch.  The fitness function receives an ADF-PROGRAM and the
+   fitness cases and returns two values: the standardized fitness and
+   the number of hits."
+  (validate-run-arguments problem-function
+                          seed
+                          maximum-generations
+                          size-of-population)
+  (initialize-run seed)
+  (multiple-value-bind (adf-specs
+                        rpb-spec
+                        fitness-cases-creator
+                        fitness-function
+                        parameter-definer
+                        termination-predicate)
+      (funcall problem-function)
+    (validate-branch-specs adf-specs rpb-spec)
+    (run-system adf-specs
+                rpb-spec
+                maximum-generations
+                size-of-population
+                seeded-programs
+                fitness-cases-creator
+                fitness-function
+                parameter-definer
+                termination-predicate)))
+
+(defun resolve-branch-spec (spec)
+  (multiple-value-bind (function-set argument-map)
+      (funcall (branch-spec-function-set-creator spec))
+    (make-resolved-branch
+     :function-set function-set
+     :argument-map argument-map
+     :terminal-set-creator (branch-spec-terminal-set-creator spec))))
+
+(defun resolve-branch-specs (adf-specs rpb-spec)
+  (values (mapcar #'resolve-branch-spec adf-specs)
+          (resolve-branch-spec rpb-spec)))
+
+(defun resolve-terminal-sets (adf-branches rpb-branch)
+  (dolist (branch adf-branches)
+    (setf (resolved-branch-terminal-set branch)
+          (funcall (resolved-branch-terminal-set-creator branch))))
+  (setf (resolved-branch-terminal-set rpb-branch)
+        (funcall (resolved-branch-terminal-set-creator rpb-branch)))
+  (values adf-branches rpb-branch))
+
+(defun run-system (adf-specs
+                   rpb-spec
+                   maximum-generations
+                   size-of-population
+                   seeded-programs
+                   fitness-cases-creator
+                   fitness-function
+                   parameter-definer
+                   termination-predicate)
+  (multiple-value-bind (adf-branches rpb-branch)
+      (resolve-branch-specs adf-specs rpb-spec)
+    (funcall parameter-definer)
+    (describe-parameters-for-run maximum-generations
+                                 size-of-population
+                                 (length adf-branches))
+    (resolve-terminal-sets adf-branches rpb-branch)
+    (let ((population
+            (create-population-with-branches size-of-population
+                                             adf-branches
+                                             rpb-branch
+                                             seeded-programs)))
+      (let ((fitness-cases (funcall fitness-cases-creator))
+            (new-programs (make-array size-of-population)))
+        (execute-generations population
+                             new-programs
+                             fitness-cases
+                             maximum-generations
+                             fitness-function
+                             termination-predicate
+                             adf-branches
+                             rpb-branch)
+        (report-on-run)
+        (values population fitness-cases)))))
 
 (defun report-on-run ()
   "Prints out the best-of-run individual."
@@ -185,13 +308,17 @@
                 (individual-standardized-fitness individual)
                 (individual-program individual))))))
 
-(defun describe-parameters-for-run (maximum-generations size-of-population)
+(defun describe-parameters-for-run (maximum-generations
+                                    size-of-population
+                                    &optional number-of-adfs)
   "Lists the parameter settings for this run."
   (format t "~2%Parameters used for this run.~
               ~%=============================")
   (format t "~%Maximum number of Generations:~50T~D"
           maximum-generations)
   (format t "~%Size of Population:~50T~D" size-of-population)
+  (when number-of-adfs
+    (format t "~%Number of ADFs:~50T~D" number-of-adfs))
   (format t "~%Maximum depth of new individuals:~50T~D"
           *max-depth-for-new-individuals*)
   (format t "~%Maximum depth of new subtrees for mutants:~50T~D"
@@ -214,106 +341,6 @@
 (defvar *generation-0-uniquifier-table*
   (make-hash-table :test #'equal)
   "Used to guarantee that all generation 0 individuals are unique.")
-
-(defun create-program-branch (function-set argument-map terminal-set
-                              minimum-depth-of-trees maximum-depth-of-trees
-                              individual-index full-cycle-p)
-  "Creates a complete branch for an ADF-containing program."
-  (create-individual-subtree
-   function-set argument-map terminal-set
-   (ecase *method-of-generation*
-     ((:full :grow) maximum-depth-of-trees)
-     (:ramped-half-and-half
-      (+ minimum-depth-of-trees
-         (mod individual-index
-              (max 1 (- maximum-depth-of-trees
-                        minimum-depth-of-trees))))))
-   t
-   (ecase *method-of-generation*
-     (:full t)
-     (:grow nil)
-     (:ramped-half-and-half full-cycle-p))))
-
-(defun create-new-program (individual-index full-cycle-p
-                           minimum-depth-of-trees maximum-depth-of-trees
-                           adf0-function-set adf0-argument-map
-                           adf0-terminal-set
-                           adf1-function-set adf1-argument-map
-                           adf1-terminal-set
-                           rpb-function-set rpb-argument-map
-                           rpb-terminal-set)
-  "Creates a new individual with ADF structure."
-  (make-adf-program
-   :adf0 (create-program-branch
-          adf0-function-set adf0-argument-map adf0-terminal-set
-          minimum-depth-of-trees maximum-depth-of-trees
-          individual-index full-cycle-p)
-   :adf1 (create-program-branch
-          adf1-function-set adf1-argument-map adf1-terminal-set
-          minimum-depth-of-trees maximum-depth-of-trees
-          individual-index full-cycle-p)
-   :rpb (create-program-branch
-         rpb-function-set rpb-argument-map rpb-terminal-set
-         minimum-depth-of-trees maximum-depth-of-trees
-         individual-index full-cycle-p)))
-
-(defun create-population (size-of-population
-                          adf0-function-set adf0-argument-map
-                          adf0-terminal-set
-                          adf1-function-set adf1-argument-map
-                          adf1-terminal-set
-                          rpb-function-set rpb-argument-map
-                          rpb-terminal-set
-                          seeded-programs)
-  "Creates the population.  This is an array of size SIZE-OF-POPULATION
-   initialized with individual records.  The first N individuals are
-   initialized with the respective seeded programs; the rest are random."
-  (let ((population (make-array size-of-population))
-        (minimum-depth-of-trees 1)
-        (attempts-at-this-individual 0)
-        (full-cycle-p nil))
-    (do ((individual-index 0))
-        ((>= individual-index size-of-population))
-      (when (zerop (mod individual-index
-                        (max 1 (- *max-depth-for-new-individuals*
-                                  minimum-depth-of-trees))))
-        (setf full-cycle-p (not full-cycle-p)))
-      (let ((new-program
-              (if (< individual-index (length seeded-programs))
-                  (nth individual-index seeded-programs)
-                  (create-new-program
-                   individual-index full-cycle-p
-                   minimum-depth-of-trees
-                   (- *max-depth-for-new-individuals* 1)
-                   adf0-function-set adf0-argument-map adf0-terminal-set
-                   adf1-function-set adf1-argument-map adf1-terminal-set
-                   rpb-function-set rpb-argument-map rpb-terminal-set))))
-        (let ((program-as-list
-                (list (adf-program-adf0 new-program)
-                      (adf-program-adf1 new-program)
-                      (adf-program-rpb new-program))))
-          (cond ((< individual-index (length seeded-programs))
-                 (setf (aref population individual-index)
-                       (make-individual :program new-program))
-                 (incf individual-index))
-                ((not (gethash program-as-list
-                               *generation-0-uniquifier-table*))
-                 (setf (aref population individual-index)
-                       (make-individual :program new-program))
-                 (setf (gethash program-as-list
-                                *generation-0-uniquifier-table*)
-                       t)
-                 (setf attempts-at-this-individual 0)
-                 (incf individual-index))
-                ((> attempts-at-this-individual 20)
-                 (incf minimum-depth-of-trees)
-                 (setf *max-depth-for-new-individuals*
-                       (max *max-depth-for-new-individuals*
-                            minimum-depth-of-trees)))
-                (t
-                 (incf attempts-at-this-individual))))))
-    (clrhash *generation-0-uniquifier-table*)
-    population))
 
 (defun choose-from-terminal-set (terminal-set)
   "Chooses a random terminal from the terminal set.  The ephemeral
@@ -368,18 +395,133 @@
              (- number-of-arguments 1) function-set argument-map
              terminal-set allowable-depth full-p))))
 
+(defun create-program-branch (function-set argument-map terminal-set
+                              minimum-depth-of-trees maximum-depth-of-trees
+                              individual-index full-cycle-p)
+  "Creates a complete branch for an ADF-containing program."
+  (create-individual-subtree
+   function-set argument-map terminal-set
+   (ecase *method-of-generation*
+     ((:full :grow) maximum-depth-of-trees)
+     (:ramped-half-and-half
+      (+ minimum-depth-of-trees
+         (mod individual-index
+              (max 1 (- maximum-depth-of-trees
+                        minimum-depth-of-trees))))))
+   t
+   (ecase *method-of-generation*
+     (:full t)
+     (:grow nil)
+     (:ramped-half-and-half full-cycle-p))))
+
+(defun create-new-program (individual-index
+                           full-cycle-p
+                           minimum-depth-of-trees
+                           maximum-depth-of-trees
+                           adf-branches
+                           rpb-branch)
+  "Creates a new individual with an arbitrary number of ADFs."
+  (flet ((create-branch (branch)
+           (create-program-branch
+            (resolved-branch-function-set branch)
+            (resolved-branch-argument-map branch)
+            (resolved-branch-terminal-set branch)
+            minimum-depth-of-trees
+            maximum-depth-of-trees
+            individual-index
+            full-cycle-p)))
+    (make-adf-program
+     :adfs (map 'vector #'create-branch adf-branches)
+     :rpb (create-branch rpb-branch))))
+
+(defun create-population-with-branches (size-of-population
+                                        adf-branches
+                                        rpb-branch
+                                        seeded-programs)
+  "Creates the population with an arbitrary number of ADF branches."
+  (let ((population (make-array size-of-population))
+        (minimum-depth-of-trees 1)
+        (attempts-at-this-individual 0)
+        (full-cycle-p nil))
+    (do ((individual-index 0))
+        ((>= individual-index size-of-population))
+      (when (zerop (mod individual-index
+                        (max 1 (- *max-depth-for-new-individuals*
+                                  minimum-depth-of-trees))))
+        (setf full-cycle-p (not full-cycle-p)))
+      (let ((new-program
+              (if (< individual-index (length seeded-programs))
+                  (nth individual-index seeded-programs)
+                  (create-new-program
+                   individual-index
+                   full-cycle-p
+                   minimum-depth-of-trees
+                   (- *max-depth-for-new-individuals* 1)
+                   adf-branches
+                   rpb-branch))))
+        (let ((program-as-list
+                (append (coerce (adf-program-adfs new-program) 'list)
+                        (list (adf-program-rpb new-program)))))
+          (cond ((< individual-index (length seeded-programs))
+                 (setf (aref population individual-index)
+                       (make-individual :program new-program))
+                 (incf individual-index))
+                ((not (gethash program-as-list
+                               *generation-0-uniquifier-table*))
+                 (setf (aref population individual-index)
+                       (make-individual :program new-program))
+                 (setf (gethash program-as-list
+                                *generation-0-uniquifier-table*)
+                       t)
+                 (setf attempts-at-this-individual 0)
+                 (incf individual-index))
+                ((> attempts-at-this-individual 20)
+                 (incf minimum-depth-of-trees)
+                 (setf *max-depth-for-new-individuals*
+                       (max *max-depth-for-new-individuals*
+                            minimum-depth-of-trees)))
+                (t
+                 (incf attempts-at-this-individual))))))
+    (clrhash *generation-0-uniquifier-table*)
+    population))
+
+(defun create-population (size-of-population
+                          adf0-function-set adf0-argument-map
+                          adf0-terminal-set
+                          adf1-function-set adf1-argument-map
+                          adf1-terminal-set
+                          rpb-function-set rpb-argument-map
+                          rpb-terminal-set
+                          seeded-programs)
+  "Creates the population.  This is an array of size SIZE-OF-POPULATION
+   initialized with individual records.  The first N individuals are
+   initialized with the respective seeded programs; the rest are random.
+
+   This is the legacy two-ADF entry point."
+  (create-population-with-branches
+   size-of-population
+   (list (make-resolved-branch
+          :function-set adf0-function-set
+          :argument-map adf0-argument-map
+          :terminal-set adf0-terminal-set)
+         (make-resolved-branch
+          :function-set adf1-function-set
+          :argument-map adf1-argument-map
+          :terminal-set adf1-terminal-set))
+   (make-resolved-branch
+    :function-set rpb-function-set
+    :argument-map rpb-argument-map
+    :terminal-set rpb-terminal-set)
+   seeded-programs))
+
 (defun execute-generations (population
                             new-programs
                             fitness-cases
                             maximum-generations
                             fitness-function
                             termination-predicate
-                            adf0-function-set adf0-argument-map
-                            adf0-terminal-set
-                            adf1-function-set adf1-argument-map
-                            adf1-terminal-set
-                            rpb-function-set rpb-argument-map
-                            rpb-terminal-set)
+                            adf-branches
+                            rpb-branch)
   "Loops until the user's termination predicate says to stop."
   (do ((current-generation 0 (+ 1 current-generation)))
       ((let ((best-of-generation (aref population 0)))
@@ -389,11 +531,8 @@
                   (individual-standardized-fitness best-of-generation)
                   (individual-hits best-of-generation))))
     (when (> current-generation 0)
-      (breed-new-population
-       population new-programs
-       adf0-function-set adf0-argument-map adf0-terminal-set
-       adf1-function-set adf1-argument-map adf1-terminal-set
-       rpb-function-set rpb-argument-map rpb-terminal-set))
+      (breed-new-population population new-programs
+                            adf-branches rpb-branch))
     (zeroize-fitness-measures-of-population population)
     (evaluate-fitness-of-population population fitness-cases
                                     fitness-function)
@@ -461,12 +600,7 @@
   population)
 
 (defun breed-new-population (population new-programs
-                             adf0-function-set adf0-argument-map
-                             adf0-terminal-set
-                             adf1-function-set adf1-argument-map
-                             adf1-terminal-set
-                             rpb-function-set rpb-argument-map
-                             rpb-terminal-set)
+                             adf-branches rpb-branch)
   "Controls the actual breeding of the new population."
   (let ((population-size (length population)))
     (do ((index 0)
@@ -496,13 +630,7 @@
                (incf index 1))
               (t
                (setf (aref new-programs index)
-                     (mutate individual-1
-                             adf0-function-set adf0-argument-map
-                             adf0-terminal-set
-                             adf1-function-set adf1-argument-map
-                             adf1-terminal-set
-                             rpb-function-set rpb-argument-map
-                             rpb-terminal-set))
+                     (mutate individual-1 adf-branches rpb-branch))
                (incf index 1)))))
     (dotimes (index population-size)
       (setf (individual-program (aref population index))
@@ -580,23 +708,21 @@
        (aref population index-of-selected-individual)))))
 
 (defun select-branch (within-program)
-  "Returns two values: a keyword in {:ADF0, :ADF1, :RPB} denoting a
-   branch selected at random (biased by the number of points in that
-   branch), and the subtree of the selected branch."
-  (let* ((adf0 (adf-program-adf0 within-program))
-         (adf1 (adf-program-adf1 within-program))
-         (rpb (adf-program-rpb within-program))
-         (adf0-points (count-crossover-points adf0))
-         (adf1-points (count-crossover-points adf1))
-         (rpb-points (count-crossover-points rpb))
-         (selected-point
-           (random-integer (+ adf0-points adf1-points rpb-points))))
-    (cond ((< selected-point adf0-points)
-           (values :adf0 adf0))
-          ((< selected-point (+ adf0-points adf1-points))
-           (values :adf1 adf1))
-          (t
-           (values :rpb rpb)))))
+  "Returns two values: a keyword denoting a branch selected at random
+   (biased by the number of points in that branch), and the subtree of
+   the selected branch."
+  (let* ((adfs (coerce (adf-program-adfs within-program) 'list))
+         (names (branch-names within-program))
+         (bodies (append adfs
+                         (list (adf-program-rpb within-program))))
+         (points (mapcar #'count-crossover-points bodies))
+         (selected-point (random-integer (reduce #'+ points))))
+    (loop for name in names
+          for body in bodies
+          for branch-points in points
+          do (if (< selected-point branch-points)
+                 (return (values name body))
+                 (decf selected-point branch-points)))))
 
 (defun crossover-selecting-branch (how-to-crossover-function male female)
   "Performs crossover on the programs MALE and FEMALE by calling
@@ -669,33 +795,26 @@
           (setf (first female-subtree-pointer) male-fragment)))
       (validate-crossover male new-male female new-female))))
 
-(defun mutate (program
-               adf0-function-set adf0-argument-map adf0-terminal-set
-               adf1-function-set adf1-argument-map adf1-terminal-set
-               rpb-function-set rpb-argument-map rpb-terminal-set)
+(defun mutate (program adf-branches rpb-branch)
   "Mutates PROGRAM by picking a random point in a random branch and
    substituting a brand new subtree created in the same way as the
    initial random population."
   (multiple-value-bind (branch branch-tree) (select-branch program)
-    (let ((mutation-point
-            (random-integer (count-crossover-points branch-tree)))
-          (new-subtree
-            (create-individual-subtree
-             (case branch
-               (:adf0 adf0-function-set)
-               (:adf1 adf1-function-set)
-               (:rpb rpb-function-set))
-             (case branch
-               (:adf0 adf0-argument-map)
-               (:adf1 adf1-argument-map)
-               (:rpb rpb-argument-map))
-             (case branch
-               (:adf0 adf0-terminal-set)
-               (:adf1 adf1-terminal-set)
-               (:rpb rpb-terminal-set))
-             *max-depth-for-new-subtrees-in-mutants*
-             t
-             nil)))
+    (let* ((index (branch-index branch))
+           (selected-branch
+             (if (eq index :rpb)
+                 rpb-branch
+                 (nth index adf-branches)))
+           (mutation-point
+             (random-integer (count-crossover-points branch-tree)))
+           (new-subtree
+             (create-individual-subtree
+              (resolved-branch-function-set selected-branch)
+              (resolved-branch-argument-map selected-branch)
+              (resolved-branch-terminal-set selected-branch)
+              *max-depth-for-new-subtrees-in-mutants*
+              t
+              nil)))
       (let ((new-branch (list (copy-tree branch-tree))))
         (multiple-value-bind (subtree-pointer fragment)
             (get-subtree (first new-branch) new-branch mutation-point)
