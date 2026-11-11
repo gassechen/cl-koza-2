@@ -401,7 +401,7 @@ doc/                    Koza II reference material
 New code and modifications in this repository are under the MIT License
 (see `COPYING`).
 
-Copyright (c) Gastón Novita <gaston.novita@microtack.com.ar>, All rights reserved.
+Copyright (c) Gastón Novita, All rights reserved.
 
 ## Koza attribution
 
