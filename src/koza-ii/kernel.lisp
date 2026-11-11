@@ -45,6 +45,12 @@
 (defvar *generation-of-best-of-run-individual* :unbound
   "The generation at which the best-of-run individual was found.")
 
+(defvar *parallel-evaluation-p* t
+  "When non-NIL, evaluate population fitness with lparallel.")
+
+(defvar *parallel-generation-p* t
+  "When non-NIL, create the initial population with lparallel.")
+
 (defstruct individual
   program
   (standardized-fitness 0)
@@ -83,13 +89,33 @@
   (assert (funcallable-designator-p problem-function)
           (problem-function)
           "Problem-Function must be a function.")
-  (assert (numberp seed) (seed)
-          "The randomizer seed must be a number."))
+  (assert (and (numberp seed) (not (zerop seed))) (seed)
+          "The randomizer seed must be a non-zero number."))
+
+(defun ensure-parallel-kernel ()
+  "Creates the lparallel kernel if it does not already exist."
+  (unless lparallel:*kernel*
+    (setf lparallel:*kernel*
+          (lparallel:make-kernel
+           (max 1 (cpus:get-number-of-processors)))))
+  lparallel:*kernel*)
+
+(defun derive-generation-seed (seed index)
+  "Returns a deterministic Park-Miller seed for population INDEX."
+  (let* ((modulus (- (expt 2 31) 1))
+         (limit (1- modulus))
+         (base (mod (abs (truncate (coerce seed 'double-float))) limit))
+         (mixed (mod (+ (* base 16807)
+                        (* (1+ index) 2654435761))
+                     limit)))
+    (coerce (1+ mixed) 'double-float)))
 
 (defun initialize-run (seed)
   (setf *seed* (coerce seed 'double-float))
   (setf *generation-of-best-of-run-individual* 0)
-  (setf *best-of-run-individual* nil))
+  (setf *best-of-run-individual* nil)
+  (when (or *parallel-evaluation-p* *parallel-generation-p*)
+    (ensure-parallel-kernel)))
 
 (defun validate-branch-spec (spec description)
   (unless (branch-spec-p spec)
@@ -434,56 +460,114 @@
      :adfs (map 'vector #'create-branch adf-branches)
      :rpb (create-branch rpb-branch))))
 
+(defun program-uniquifier-key (program)
+  (append (coerce (adf-program-adfs program) 'list)
+          (list (adf-program-rpb program))))
+
 (defun create-population-with-branches (size-of-population
                                         adf-branches
                                         rpb-branch
                                         seeded-programs)
-  "Creates the population with an arbitrary number of ADF branches."
-  (let ((population (make-array size-of-population))
-        (minimum-depth-of-trees 1)
-        (attempts-at-this-individual 0)
-        (full-cycle-p nil))
-    (do ((individual-index 0))
-        ((>= individual-index size-of-population))
+  "Creates the population with an arbitrary number of ADF branches.
+
+   Random programs are generated from deterministic per-individual
+   seeds, so the initial population is reproducible regardless of the
+   number of worker threads."
+  (let* ((population (make-array size-of-population))
+         (seeded-count (min size-of-population (length seeded-programs)))
+         (minimum-depth-of-trees 1)
+         (full-cycle-p nil)
+         (generation-flags (make-array size-of-population))
+         (candidates (make-array size-of-population))
+         (states (make-array size-of-population))
+         (base-seed *seed*)
+         (generation-maximum-depth *max-depth-for-new-individuals*)
+         (generation-method *method-of-generation*))
+    (dotimes (individual-index seeded-count)
+      (setf (aref population individual-index)
+            (make-individual :program (nth individual-index
+                                           seeded-programs))))
+    (dotimes (individual-index size-of-population)
       (when (zerop (mod individual-index
                         (max 1 (- *max-depth-for-new-individuals*
                                   minimum-depth-of-trees))))
         (setf full-cycle-p (not full-cycle-p)))
-      (let ((new-program
-              (if (< individual-index (length seeded-programs))
-                  (nth individual-index seeded-programs)
-                  (create-new-program
-                   individual-index
-                   full-cycle-p
-                   minimum-depth-of-trees
-                   (- *max-depth-for-new-individuals* 1)
-                   adf-branches
-                   rpb-branch))))
-        (let ((program-as-list
-                (append (coerce (adf-program-adfs new-program) 'list)
-                        (list (adf-program-rpb new-program)))))
-          (cond ((< individual-index (length seeded-programs))
-                 (setf (aref population individual-index)
-                       (make-individual :program new-program))
-                 (incf individual-index))
-                ((not (gethash program-as-list
-                               *generation-0-uniquifier-table*))
-                 (setf (aref population individual-index)
-                       (make-individual :program new-program))
-                 (setf (gethash program-as-list
-                                *generation-0-uniquifier-table*)
-                       t)
+      (setf (aref generation-flags individual-index) full-cycle-p))
+    (labels ((generate (individual-index)
+               (let ((*seed* (derive-generation-seed
+                              base-seed individual-index))
+                     (*max-depth-for-new-individuals*
+                       generation-maximum-depth)
+                     (*method-of-generation* generation-method))
+                 (setf (aref candidates individual-index)
+                       (create-new-program
+                        individual-index
+                        (aref generation-flags individual-index)
+                        minimum-depth-of-trees
+                        (- *max-depth-for-new-individuals* 1)
+                        adf-branches
+                        rpb-branch))
+                 (setf (aref states individual-index) *seed*))))
+      (let ((random-count (- size-of-population seeded-count)))
+        (cond ((zerop random-count))
+              ((and *parallel-generation-p* (> random-count 1))
+               (ensure-parallel-kernel)
+               (lparallel:pdotimes (offset random-count)
+                 (generate (+ seeded-count offset))))
+              (t
+               (dotimes (offset random-count)
+                 (generate (+ seeded-count offset))))))
+    (let ((attempts-at-this-individual 0)
+          (last-state base-seed))
+      (clrhash *generation-0-uniquifier-table*)
+      (loop for individual-index from seeded-count below size-of-population
+            do (let ((new-program (aref candidates individual-index))
+                     (state (aref states individual-index)))
                  (setf attempts-at-this-individual 0)
-                 (incf individual-index))
-                ((> attempts-at-this-individual 20)
-                 (incf minimum-depth-of-trees)
-                 (setf *max-depth-for-new-individuals*
-                       (max *max-depth-for-new-individuals*
-                            minimum-depth-of-trees)))
-                (t
-                 (incf attempts-at-this-individual))))))
-    (clrhash *generation-0-uniquifier-table*)
-    population))
+                 (loop
+                   (let ((program-as-list
+                           (program-uniquifier-key new-program)))
+                     (cond ((not (gethash program-as-list
+                                          *generation-0-uniquifier-table*))
+                            (setf (aref population individual-index)
+                                  (make-individual :program new-program))
+                            (setf (gethash program-as-list
+                                           *generation-0-uniquifier-table*)
+                                  t)
+                            (return))
+                           ((> attempts-at-this-individual 20)
+                            (incf minimum-depth-of-trees)
+                            (setf *max-depth-for-new-individuals*
+                                  (max *max-depth-for-new-individuals*
+                                       minimum-depth-of-trees))
+                            (let ((*seed* state))
+                              (setf new-program
+                                    (create-new-program
+                                     individual-index
+                                     (aref generation-flags individual-index)
+                                     minimum-depth-of-trees
+                                     (- *max-depth-for-new-individuals* 1)
+                                     adf-branches
+                                     rpb-branch))
+                              (setf state *seed*)))
+                           (t
+                            (incf attempts-at-this-individual)
+                            (let ((*seed* state))
+                              (setf new-program
+                                    (create-new-program
+                                     individual-index
+                                     (aref generation-flags individual-index)
+                                     minimum-depth-of-trees
+                                     (- *max-depth-for-new-individuals* 1)
+                                     adf-branches
+                                     rpb-branch))
+                              (setf state *seed*))))))
+                 (setf (aref candidates individual-index) new-program
+                       (aref states individual-index) state
+                       last-state state)))
+      (clrhash *generation-0-uniquifier-table*)
+      (setf *seed* last-state))
+    population)))
 
 (defun create-population (size-of-population
                           adf0-function-set adf0-argument-map
@@ -559,21 +643,92 @@
       (setf (individual-normalized-fitness individual) 0.0)
       (setf (individual-hits individual) 0))))
 
+(defun capture-run-parameters ()
+  (list (cons '*verbose* *verbose*)
+        (cons '*number-of-fitness-cases* *number-of-fitness-cases*)
+        (cons '*max-depth-for-new-individuals*
+              *max-depth-for-new-individuals*)
+        (cons '*max-depth-for-individuals-after-crossover*
+              *max-depth-for-individuals-after-crossover*)
+        (cons '*fitness-proportionate-reproduction-fraction*
+              *fitness-proportionate-reproduction-fraction*)
+        (cons '*crossover-at-any-point-fraction*
+              *crossover-at-any-point-fraction*)
+        (cons '*crossover-at-function-point-fraction*
+              *crossover-at-function-point-fraction*)
+        (cons '*max-depth-for-new-subtrees-in-mutants*
+              *max-depth-for-new-subtrees-in-mutants*)
+        (cons '*method-of-selection* *method-of-selection*)
+        (cons '*method-of-generation* *method-of-generation*)
+        (cons '*tournament-size* *tournament-size*)
+        (cons '*best-of-run-individual* *best-of-run-individual*)
+        (cons '*generation-of-best-of-run-individual*
+              *generation-of-best-of-run-individual*)
+        (cons '*seed* *seed*)))
+
+(defun evaluate-individual-fitness (individual fitness-cases
+                                    fitness-function parameters)
+  (let ((*verbose* (cdr (assoc '*verbose* parameters)))
+        (*number-of-fitness-cases*
+          (cdr (assoc '*number-of-fitness-cases* parameters)))
+        (*max-depth-for-new-individuals*
+          (cdr (assoc '*max-depth-for-new-individuals* parameters)))
+        (*max-depth-for-individuals-after-crossover*
+          (cdr (assoc '*max-depth-for-individuals-after-crossover*
+                      parameters)))
+        (*fitness-proportionate-reproduction-fraction*
+          (cdr (assoc '*fitness-proportionate-reproduction-fraction*
+                      parameters)))
+        (*crossover-at-any-point-fraction*
+          (cdr (assoc '*crossover-at-any-point-fraction* parameters)))
+        (*crossover-at-function-point-fraction*
+          (cdr (assoc '*crossover-at-function-point-fraction*
+                      parameters)))
+        (*max-depth-for-new-subtrees-in-mutants*
+          (cdr (assoc '*max-depth-for-new-subtrees-in-mutants*
+                      parameters)))
+        (*method-of-selection*
+          (cdr (assoc '*method-of-selection* parameters)))
+        (*method-of-generation*
+          (cdr (assoc '*method-of-generation* parameters)))
+        (*tournament-size* (cdr (assoc '*tournament-size* parameters)))
+        (*best-of-run-individual*
+          (cdr (assoc '*best-of-run-individual* parameters)))
+        (*generation-of-best-of-run-individual*
+          (cdr (assoc '*generation-of-best-of-run-individual*
+                      parameters)))
+        (*seed* (cdr (assoc '*seed* parameters))))
+    (multiple-value-bind (standardized-fitness hits)
+        (funcall fitness-function (individual-program individual)
+                                 fitness-cases)
+      (setf (individual-standardized-fitness individual)
+            standardized-fitness)
+      (setf (individual-hits individual) hits))))
+
 (defun evaluate-fitness-of-population (population fitness-cases
                                        fitness-function)
   "Evaluates and records the fitness and hits of each individual.
 
-   Evaluation is sequential because the automatically defined functions
-   rely on dynamically bound special variables (the ADF bodies and the
-   dummy arguments), which are not thread-safe."
-  (dotimes (individual-index (length population))
-    (let ((individual (aref population individual-index)))
-      (multiple-value-bind (standardized-fitness hits)
-          (funcall fitness-function (individual-program individual)
-                                   fitness-cases)
-        (setf (individual-standardized-fitness individual)
-              standardized-fitness)
-        (setf (individual-hits individual) hits)))))
+   When *PARALLEL-EVALUATION-P* is true, individuals are evaluated in
+   parallel with lparallel.  Set it to NIL for fitness functions that
+   are not thread-safe."
+  (let ((size-of-population (length population))
+        (parameters (capture-run-parameters)))
+    (if *parallel-evaluation-p*
+        (progn
+          (ensure-parallel-kernel)
+          (lparallel:pdotimes (individual-index size-of-population)
+            (evaluate-individual-fitness
+             (aref population individual-index)
+             fitness-cases
+             fitness-function
+             parameters)))
+        (dotimes (individual-index size-of-population)
+          (evaluate-individual-fitness
+           (aref population individual-index)
+           fitness-cases
+           fitness-function
+           parameters)))))
 
 (defun normalize-fitness-of-population (population)
   "Computes the normalized and adjusted fitness of each individual."

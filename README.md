@@ -15,7 +15,7 @@ The `cl-koza-ii` system is self-contained and does not depend on `gp`.
 
 ### Status
 
-Phase 3 is complete:
+Phases 1–4 are complete:
 
 - ADF kernel with an arbitrary architecture of
   **ADF0 … ADF(N-1) + RPB** (result-producing branch), where `N >= 0`.
@@ -24,15 +24,19 @@ Phase 3 is complete:
   remain supported as compatibility layers.
 - Generic tree interpreter with explicit terminal environments and no
   dependency on dynamically bound ADF variables.
-- Examples: **even-5-parity** with two ADFs and **even-5-parity-3-adfs**
-  with three hierarchical ADFs.
+- Examples: **even-5-parity** with two ADFs, **even-5-parity-3-adfs**
+  with three hierarchical ADFs, and **even-5-parity-n-adfs** with a
+  configurable number of ADFs.
+- Parallel fitness evaluation and initial-population generation through
+  `lparallel`, with deterministic results independent of worker count.
 - FiveAM test suite integrated with ASDF.
 
 ### Requirements
 
 - A Common Lisp implementation (tested with SBCL).
 - ASDF.
-- Quicklisp for `fiveam` when running the test suite.
+- Quicklisp for `lparallel`, `cl-cpus`, and `fiveam` (the latter for the
+  test suite).
 
 ### Installation
 
@@ -98,6 +102,19 @@ The three-ADF version uses the generalized `run-adf-system` entry point:
  :seed 1.0)
 ```
 
+The parameterized version defaults to four ADFs and accepts any
+non-negative branch count:
+
+```lisp
+(asdf:load-system "cl-koza-ii/examples/even-5-parity-n-adfs")
+
+(cl-koza-ii.examples.even-5-parity-n-adfs:run-example
+ :number-of-adfs 6
+ :maximum-generations 1
+ :size-of-population 8
+ :seed 1.0)
+```
+
 ### Architecture
 
 An overall program is an `adf-program` with `N` automatically defined
@@ -114,7 +131,9 @@ problem's function sets. In the original even-5-parity example, there are two
 ADFs. ADF0 and ADF1 each take three arguments (`ARG0`, `ARG1`, `ARG2`), ADF1
 may call ADF0, and the result-producing branch may call both ADFs. ADF0 does
 not call another ADF. The three-ADF example adds ADF2, which may call ADF0
-and ADF1, and lets the result-producing branch call all three ADFs.
+and ADF1, and lets the result-producing branch call all three ADFs. The
+parameterized example generalizes this pattern: `ADF(I)` may call
+`ADF0 … ADF(I-1)`, and the result-producing branch may call every ADF.
 
 The main program operations are exported from `cl-koza-ii.program`:
 
@@ -249,6 +268,23 @@ by the book. Its known correct program is:
 Known program: standardized-fitness=0 hits=32
 ```
 
+### Parallel execution
+
+`cl-koza-ii` uses `lparallel` by default for fitness evaluation and for
+generating the initial random population. The worker pool is created on
+demand and reused across runs.
+
+```lisp
+(let ((*parallel-evaluation-p* nil))
+  (run-adf-system 'my-problem 1.0 50 1000))
+```
+
+Set `*parallel-evaluation-p*` to `NIL` for fitness functions that are not
+thread-safe. Set `*parallel-generation-p*` to `NIL` to generate the initial
+population serially. Initial generation uses deterministic per-individual
+seeds and serialized uniqueness resolution, so the same randomizer seed
+produces the same population regardless of the number of workers.
+
 ### Example: even-5-parity with three ADFs
 
 The `even-5-parity-3-adfs` example keeps the same fitness cases and Boolean
@@ -280,6 +316,31 @@ Known program: standardized-fitness=0.0 hits=32
 The example uses the generic `run-adf-system` entry point and the
 `evaluate-adf-program` interpreter.
 
+### Example: even-5-parity with N ADFs
+
+The `even-5-parity-n-adfs` example parameterizes the hierarchical
+architecture. `*number-of-adfs*` defaults to `4`; `run`, `run-example`, and
+`verify-known-program` also accept an explicit branch count.
+
+```lisp
+(asdf:load-system "cl-koza-ii/examples/even-5-parity-n-adfs")
+
+(cl-koza-ii.examples.even-5-parity-n-adfs:run-example
+ :number-of-adfs 4
+ :maximum-generations 1
+ :size-of-population 8
+ :seed 1.0)
+```
+
+`run` supports `N >= 0`, including programs with no ADFs. The known correct
+program is available for `N >= 2`: it keeps the two-ADF solution in ADF0 and
+ADF1, adds pass-through branches for higher indices, and calls the last ADF
+from the result-producing branch.
+
+```lisp
+(cl-koza-ii.examples.even-5-parity-n-adfs:verify-known-program 4)
+```
+
 ### Tests
 
 The test suite uses FiveAM and is registered as `cl-koza-ii/tests`:
@@ -291,7 +352,7 @@ The test suite uses FiveAM and is registered as `cl-koza-ii/tests`:
 At the time of writing the suite reports:
 
 ```text
-Pass: 2936 (99%)
+Pass: 3008 (99%)
 Skip: 2 ( 0%)
 Fail: 0 ( 0%)
 ```
@@ -314,8 +375,11 @@ The two skipped tests document known issues:
   layer. Kernel tests cover zero, one, two, three, and four ADFs.
 - **Phase 3 (done):** generic tree interpreter with explicit environments and
   an even-5-parity example with three hierarchical ADFs.
-- **Future work:** more N-ADF examples, architecture-selection experiments,
-  and optional parallel fitness evaluation.
+- **Phase 4 (done):** parallel fitness evaluation and initial-population
+  generation with `lparallel`, including reproducibility and serial fallbacks,
+  plus a parameterized even-5-parity example for arbitrary ADF counts.
+- **Future work:** architecture-selection experiments and additional N-ADF
+  benchmarks.
 
 ### Project layout
 

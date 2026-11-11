@@ -60,6 +60,8 @@
    #:*method-of-selection*
    #:*method-of-generation*
    #:*tournament-size*
+   #:*parallel-evaluation-p*
+   #:*parallel-generation-p*
    #:*best-of-run-individual*
    #:*generation-of-best-of-run-individual*
    #:run-genetic-programming-system
@@ -99,6 +101,8 @@
    #:*method-of-selection*
    #:*method-of-generation*
    #:*tournament-size*
+   #:*parallel-evaluation-p*
+   #:*parallel-generation-p*
    #:*best-of-run-individual*
    #:*generation-of-best-of-run-individual*
    #:run-genetic-programming-system
