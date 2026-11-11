@@ -1,10 +1,10 @@
-(defpackage #:cl-koza-ii.tests
+(defpackage #:cl-koza-2.tests
   (:use #:cl
         #:fiveam
-        #:cl-koza-ii
-        #:cl-koza-ii.program
-        #:cl-koza-ii.random
-        #:cl-koza-ii.functions)
+        #:cl-koza-2
+        #:cl-koza-2.program
+        #:cl-koza-2.random
+        #:cl-koza-2.functions)
   (:export
    #:run-tests
-   #:cl-koza-ii-tests))
+   #:cl-koza-2-tests))

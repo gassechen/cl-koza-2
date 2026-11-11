@@ -1,4 +1,4 @@
-(in-package #:cl-koza-ii.kernel)
+(in-package #:cl-koza-2.kernel)
 
 (defvar *verbose* nil
   "When non-NIL, print a report at the end of every generation.")

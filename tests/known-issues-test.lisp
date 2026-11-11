@@ -1,6 +1,6 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (test maximum-generations-zero-known-issue
   (skip "KNOWN ISSUE: run-genetic-programming-system accepts maximum-generations 0, but report-on-run signals an error because *best-of-run-individual* remains NIL. Expected: reject 0 at the API boundary or handle it gracefully."))

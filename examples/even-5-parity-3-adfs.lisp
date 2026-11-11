@@ -1,13 +1,13 @@
-(defpackage #:cl-koza-ii.examples.even-5-parity-3-adfs
+(defpackage #:cl-koza-2.examples.even-5-parity-3-adfs
   (:use #:cl
-        #:cl-koza-ii)
+        #:cl-koza-2)
   (:export
    #:even-5-parity-3-adfs
    #:run
    #:run-example
    #:verify-known-program))
 
-(in-package #:cl-koza-ii.examples.even-5-parity-3-adfs)
+(in-package #:cl-koza-2.examples.even-5-parity-3-adfs)
 
 (defvar d0)
 (defvar d1)

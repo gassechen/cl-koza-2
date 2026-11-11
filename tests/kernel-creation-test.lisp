@@ -1,6 +1,6 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (test individual-defaults
   (let ((individual (make-individual)))
@@ -31,7 +31,7 @@
                                     :adjusted-fitness 1/3
                                     :normalized-fitness 0.4
                                     :hits 5))
-         (copy (cl-koza-ii.kernel:copy-individual original)))
+         (copy (cl-koza-2.kernel:copy-individual original)))
     (is (not (eq original copy)))
     (is (eq program (individual-program copy)))
     (is (= 2 (individual-standardized-fitness copy)))

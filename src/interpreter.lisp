@@ -1,4 +1,4 @@
-(in-package #:cl-koza-ii.interpreter)
+(in-package #:cl-koza-2.interpreter)
 
 (declaim (ftype (function (t t &key (:environment t)) t)
                 evaluate-adf-tree))

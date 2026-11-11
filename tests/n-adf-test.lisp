@@ -1,6 +1,6 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (defparameter *n-adf-base-function-set* '(and or nand nor))
 (defparameter *n-adf-base-argument-map* '(2 2 2 2))

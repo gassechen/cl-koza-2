@@ -1,4 +1,4 @@
-(in-package #:cl-koza-ii.random)
+(in-package #:cl-koza-2.random)
 
 (defvar *seed* :unbound
   "The seed for the Park-Miller congruential randomizer.")

@@ -1,6 +1,6 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (test parallel-generation-matches-sequential
   (with-kernel-defaults
@@ -21,7 +21,7 @@
                    (*parallel-evaluation-p* parallel-p))
                (capture-output
                  (multiple-value-bind (population)
-                     (cl-koza-ii.examples.even-5-parity-3-adfs:run
+                     (cl-koza-2.examples.even-5-parity-3-adfs:run
                       2 8 1.0)
                    (map 'list
                         (lambda (individual)

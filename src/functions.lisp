@@ -1,4 +1,4 @@
-(in-package #:cl-koza-ii.functions)
+(in-package #:cl-koza-2.functions)
 
 (defun % (numerator denominator)
   "The Protected Division Function."

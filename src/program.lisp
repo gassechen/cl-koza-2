@@ -1,4 +1,4 @@
-(in-package #:cl-koza-ii.program)
+(in-package #:cl-koza-2.program)
 
 (defstruct (adf-program
              (:constructor %make-adf-program (adfs rpb))

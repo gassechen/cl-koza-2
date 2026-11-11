@@ -1,11 +1,11 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (defun call-n-adf-problem (&optional (count
-                                       cl-koza-ii.examples.even-5-parity-n-adfs:*number-of-adfs*))
-  (let ((cl-koza-ii.examples.even-5-parity-n-adfs:*number-of-adfs* count))
-    (cl-koza-ii.examples.even-5-parity-n-adfs:even-5-parity-n-adfs)))
+                                       cl-koza-2.examples.even-5-parity-n-adfs:*number-of-adfs*))
+  (let ((cl-koza-2.examples.even-5-parity-n-adfs:*number-of-adfs* count))
+    (cl-koza-2.examples.even-5-parity-n-adfs:even-5-parity-n-adfs)))
 
 (test even-5-parity-n-adfs-contract
   (with-kernel-defaults
@@ -73,7 +73,7 @@
         (let ((output
                 (capture-output
                  (multiple-value-bind (fitness-ok-p hits-ok-p)
-                     (cl-koza-ii.examples.even-5-parity-n-adfs:verify-known-program
+                     (cl-koza-2.examples.even-5-parity-n-adfs:verify-known-program
                       count)
                    (setf result (list fitness-ok-p hits-ok-p))))))
           (is (equal '(t t) result))
@@ -87,7 +87,7 @@
         (let ((output
                 (capture-output
                  (multiple-value-setq (population fitness-cases)
-                   (cl-koza-ii.examples.even-5-parity-n-adfs:run
+                   (cl-koza-2.examples.even-5-parity-n-adfs:run
                     1 8 1.0 :number-of-adfs count)))))
           (is (= 8 (length population)))
           (is (= 32 (length fitness-cases)))
@@ -108,7 +108,7 @@
       (let ((output
               (capture-output
                (setf population
-                     (cl-koza-ii.examples.even-5-parity-n-adfs:run-example
+                     (cl-koza-2.examples.even-5-parity-n-adfs:run-example
                       :number-of-adfs 3
                       :maximum-generations 1
                       :size-of-population 8

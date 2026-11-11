@@ -1,6 +1,6 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (test even-5-parity-contract
   (with-kernel-defaults
@@ -14,7 +14,7 @@
                           fitness-function
                           parameter-definer
                           termination-predicate)
-        (cl-koza-ii.examples.even-5-parity:even-5-parity)
+        (cl-koza-2.examples.even-5-parity:even-5-parity)
       (is (every #'fboundp
                  (list adf0-function-set-creator
                        adf1-function-set-creator
@@ -88,7 +88,7 @@
       (let ((output
               (capture-output
                (multiple-value-bind (fitness-ok-p hits-ok-p)
-                   (cl-koza-ii.examples.even-5-parity:verify-known-program)
+                   (cl-koza-2.examples.even-5-parity:verify-known-program)
                  (setf result (list fitness-ok-p hits-ok-p))))))
         (is (equal '(t t) result))
         (is (search "Known program" output))))))
@@ -99,7 +99,7 @@
       (let ((output
               (capture-output
                (multiple-value-setq (population fitness-cases)
-                 (cl-koza-ii.examples.even-5-parity:run 1 8 1.0)))))
+                 (cl-koza-2.examples.even-5-parity:run 1 8 1.0)))))
         (is (= 8 (length population)))
         (is (= 32 (length fitness-cases)))
         (is (typep *best-of-run-individual* 'individual))
@@ -111,7 +111,7 @@
   (with-kernel-defaults
     (let ((output
             (capture-output
-             (cl-koza-ii.examples.even-5-parity:run 1 8 1.0 :verbose t))))
+             (cl-koza-2.examples.even-5-parity:run 1 8 1.0 :verbose t))))
       (is (search "Generation 0" output)))))
 
 (test run-example-small
@@ -120,7 +120,7 @@
       (let ((output
               (capture-output
                (setf population
-                     (cl-koza-ii.examples.even-5-parity:run-example
+                     (cl-koza-2.examples.even-5-parity:run-example
                       :maximum-generations 1
                       :size-of-population 8
                       :seed 1.0)))))

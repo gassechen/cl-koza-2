@@ -1,6 +1,6 @@
-(defpackage #:cl-koza-ii.examples.even-5-parity-n-adfs
+(defpackage #:cl-koza-2.examples.even-5-parity-n-adfs
   (:use #:cl
-        #:cl-koza-ii)
+        #:cl-koza-2)
   (:export
    #:*number-of-adfs*
    #:even-5-parity-n-adfs
@@ -8,7 +8,7 @@
    #:run-example
    #:verify-known-program))
 
-(in-package #:cl-koza-ii.examples.even-5-parity-n-adfs)
+(in-package #:cl-koza-2.examples.even-5-parity-n-adfs)
 
 (defparameter *number-of-adfs* 4)
 
@@ -32,7 +32,7 @@
 
 (defun adf-symbol (index)
   (intern (format nil "ADF~D" index)
-          (find-package '#:cl-koza-ii.examples.even-5-parity-n-adfs)))
+          (find-package '#:cl-koza-2.examples.even-5-parity-n-adfs)))
 
 (defun adf-function-set (index)
   (append '(and or nand nor)

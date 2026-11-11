@@ -1,4 +1,4 @@
-(defpackage #:cl-koza-ii.random
+(defpackage #:cl-koza-2.random
   (:use #:cl)
   (:export
    #:*seed*
@@ -6,12 +6,12 @@
    #:random-integer
    #:random-floating-point-number))
 
-(defpackage #:cl-koza-ii.functions
+(defpackage #:cl-koza-2.functions
   (:use #:cl)
   (:export
    #:%))
 
-(defpackage #:cl-koza-ii.program
+(defpackage #:cl-koza-2.program
   (:use #:cl)
   (:export
    #:adf-program
@@ -36,18 +36,18 @@
    #:get-subtree
    #:get-function-subtree))
 
-(defpackage #:cl-koza-ii.interpreter
+(defpackage #:cl-koza-2.interpreter
   (:use #:cl
-        #:cl-koza-ii.program)
+        #:cl-koza-2.program)
   (:export
    #:evaluate-adf-tree
    #:evaluate-adf-branch
    #:evaluate-adf-program))
 
-(defpackage #:cl-koza-ii.kernel
+(defpackage #:cl-koza-2.kernel
   (:use #:cl
-        #:cl-koza-ii.random
-        #:cl-koza-ii.program)
+        #:cl-koza-2.random
+        #:cl-koza-2.program)
   (:export
    #:*verbose*
    #:*number-of-fitness-cases*
@@ -84,11 +84,11 @@
    #:print-population
    #:describe-parameters-for-run))
 
-(defpackage #:cl-koza-ii
+(defpackage #:cl-koza-2
   (:use #:cl
-        #:cl-koza-ii.kernel
-        #:cl-koza-ii.program
-        #:cl-koza-ii.interpreter)
+        #:cl-koza-2.kernel
+        #:cl-koza-2.program
+        #:cl-koza-2.interpreter)
   (:export
    #:*verbose*
    #:*number-of-fitness-cases*

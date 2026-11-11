@@ -1,7 +1,7 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(def-suite cl-koza-ii-tests
-  :description "Test suite for cl-koza-ii")
+(def-suite cl-koza-2-tests
+  :description "Test suite for cl-koza-2")
 
 (defun run-tests ()
-  (fiveam:run! 'cl-koza-ii-tests))
+  (fiveam:run! 'cl-koza-2-tests))

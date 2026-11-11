@@ -2,11 +2,11 @@
 
 Common Lisp implementation of John Koza's genetic programming system.
 
-This repository contains the **`cl-koza-ii`** system, a Common Lisp
+This repository contains the **`cl-koza-2`** system, a Common Lisp
 implementation of the Koza II kernel with automatically defined functions
 (ADFs), based on *Genetic Programming II*.
 
-## cl-koza-ii
+## cl-koza-2
 
 ### Status
 
@@ -44,7 +44,7 @@ Place the repository in a directory known to ASDF, for example:
 Then load the system:
 
 ```lisp
-(asdf:load-system "cl-koza-ii")
+(asdf:load-system "cl-koza-2")
 ```
 
 ### Quick start
@@ -53,9 +53,9 @@ Load the example system and verify the known correct program from
 *Genetic Programming II*:
 
 ```lisp
-(asdf:load-system "cl-koza-ii/examples/even-5-parity")
+(asdf:load-system "cl-koza-2/examples/even-5-parity")
 
-(cl-koza-ii.examples.even-5-parity:verify-known-program)
+(cl-koza-2.examples.even-5-parity:verify-known-program)
 ```
 
 This prints the standardized fitness and number of hits, and returns two
@@ -65,7 +65,7 @@ values: `T` when the known program has fitness 0, and `T` when it solves all
 Run a small smoke test:
 
 ```lisp
-(cl-koza-ii.examples.even-5-parity:run-example
+(cl-koza-2.examples.even-5-parity:run-example
  :maximum-generations 1
  :size-of-population 8
  :seed 1.0)
@@ -75,23 +75,23 @@ Run a small smoke test:
 population of 4000 individuals:
 
 ```lisp
-(cl-koza-ii.examples.even-5-parity:run-example)
+(cl-koza-2.examples.even-5-parity:run-example)
 ```
 
 The same run can be started directly with `run`:
 
 ```lisp
-(cl-koza-ii.examples.even-5-parity:run 51 4000 1.0 :verbose t)
+(cl-koza-2.examples.even-5-parity:run 51 4000 1.0 :verbose t)
 ```
 
 The three-ADF version uses the generalized `run-adf-system` entry point:
 
 ```lisp
-(asdf:load-system "cl-koza-ii/examples/even-5-parity-3-adfs")
+(asdf:load-system "cl-koza-2/examples/even-5-parity-3-adfs")
 
-(cl-koza-ii.examples.even-5-parity-3-adfs:verify-known-program)
+(cl-koza-2.examples.even-5-parity-3-adfs:verify-known-program)
 
-(cl-koza-ii.examples.even-5-parity-3-adfs:run-example
+(cl-koza-2.examples.even-5-parity-3-adfs:run-example
  :maximum-generations 1
  :size-of-population 8
  :seed 1.0)
@@ -101,9 +101,9 @@ The parameterized version defaults to four ADFs and accepts any
 non-negative branch count:
 
 ```lisp
-(asdf:load-system "cl-koza-ii/examples/even-5-parity-n-adfs")
+(asdf:load-system "cl-koza-2/examples/even-5-parity-n-adfs")
 
-(cl-koza-ii.examples.even-5-parity-n-adfs:run-example
+(cl-koza-2.examples.even-5-parity-n-adfs:run-example
  :number-of-adfs 6
  :maximum-generations 1
  :size-of-population 8
@@ -130,7 +130,7 @@ and ADF1, and lets the result-producing branch call all three ADFs. The
 parameterized example generalizes this pattern: `ADF(I)` may call
 `ADF0 … ADF(I-1)`, and the result-producing branch may call every ADF.
 
-The main program operations are exported from `cl-koza-ii.program`:
+The main program operations are exported from `cl-koza-2.program`:
 
 - `make-adf-program`, `adf-program-adfs`, `adf-program-adf`,
   `adf-program-branch-count`, `adf-program-rpb`
@@ -146,8 +146,8 @@ The main program operations are exported from `cl-koza-ii.program`:
 `:adfs` is omitted; calling it with no arguments still creates a program with
 two `NIL` ADFs.
 
-The generic tree interpreter is exported from `cl-koza-ii.interpreter` and
-re-exported from `cl-koza-ii`:
+The generic tree interpreter is exported from `cl-koza-2.interpreter` and
+re-exported from `cl-koza-2`:
 
 - `evaluate-adf-program` evaluates the result-producing branch.
 - `evaluate-adf-branch` evaluates a selected branch.
@@ -160,7 +160,7 @@ interpreter does not use dynamically bound ADF variables. It supports
 `AND`, `OR`, `IF`, and `PROGN` as special forms and calls other symbols as
 Common Lisp functions.
 
-The generalized kernel entry point is exported from `cl-koza-ii`:
+The generalized kernel entry point is exported from `cl-koza-2`:
 
 ```lisp
 (run-adf-system problem-function
@@ -265,7 +265,7 @@ Known program: standardized-fitness=0 hits=32
 
 ### Parallel execution
 
-`cl-koza-ii` uses `lparallel` by default for fitness evaluation and for
+`cl-koza-2` uses `lparallel` by default for fitness evaluation and for
 generating the initial random population. The worker pool is created on
 demand and reused across runs.
 
@@ -318,9 +318,9 @@ architecture. `*number-of-adfs*` defaults to `4`; `run`, `run-example`, and
 `verify-known-program` also accept an explicit branch count.
 
 ```lisp
-(asdf:load-system "cl-koza-ii/examples/even-5-parity-n-adfs")
+(asdf:load-system "cl-koza-2/examples/even-5-parity-n-adfs")
 
-(cl-koza-ii.examples.even-5-parity-n-adfs:run-example
+(cl-koza-2.examples.even-5-parity-n-adfs:run-example
  :number-of-adfs 4
  :maximum-generations 1
  :size-of-population 8
@@ -333,15 +333,15 @@ ADF1, adds pass-through branches for higher indices, and calls the last ADF
 from the result-producing branch.
 
 ```lisp
-(cl-koza-ii.examples.even-5-parity-n-adfs:verify-known-program 4)
+(cl-koza-2.examples.even-5-parity-n-adfs:verify-known-program 4)
 ```
 
 ### Tests
 
-The test suite uses FiveAM and is registered as `cl-koza-ii/tests`:
+The test suite uses FiveAM and is registered as `cl-koza-2/tests`:
 
 ```lisp
-(asdf:test-system "cl-koza-ii")
+(asdf:test-system "cl-koza-2")
 ```
 
 At the time of writing the suite reports:
@@ -379,8 +379,8 @@ The two skipped tests document known issues:
 ### Project layout
 
 ```text
-cl-koza-ii.asd          ASDF systems
-src/koza-ii/            Koza II kernel
+cl-koza-2.asd          ASDF systems
+src/                    Koza II kernel
 examples/               Koza II examples
 tests/                  FiveAM test suite
 doc/                    Koza II reference material
@@ -401,4 +401,69 @@ doc/                    Koza II reference material
 New code and modifications in this repository are under the MIT License
 (see `COPYING`).
 
-Copyright (c) Guillaume MICHEL, All rights reserved.
+Copyright (c) Gastón Novita <gaston.novita@microtack.com.ar>, All rights reserved.
+
+## Koza attribution
+
+This is an independent Common Lisp implementation inspired by John R. Koza's
+*Genetic Programming II: Automatic Discovery of Reusable Programs* (MIT Press,
+1994). Koza's book and original Little Lisp software are copyrighted by John R.
+Koza. The Koza I/Little Lisp source code is not included in this repository.
+
+The following license was part of the original project and is reproduced for
+attribution and historical reference. It applies to Koza's Little Lisp software,
+not to the new code in this repository, which remains under the MIT License above.
+
+### Little Lisp License
+
+Copyright (c) John Koza, All rights reserved.
+U.S. Patent #4,935,877.  Other patents pending.
+
+ROYALTY-FREE LICENSE FOR GENETIC PROGRAMMING SOFTWARE FOR ACADEMIC PURPOSES
+===========================================================================
+
+As you requested, I am including herewith, FOR YOUR INFORMATION AND
+INSPECTION ONLY, a copy of my "SIMPLE LISP" software for genetic
+programming.  Please be advised that this software is copyrighted and
+is the subject of my United States patents 4,935,877 5,136,686, and
+5,148,513, foreign counterparts, and other patents pending.
+
+IF YOU WISH TO USE THIS SOFTWARE, you may have a royalty-free,
+non-exclusive license under these proprietary rights, without the
+right of sublicense, to use (but not to make or sell) the software
+for academic purposes only and only then if you receive no money
+or other valuable consideration as a result of its use.
+Neither the software (or copies thereof) nor this license is
+transferrable for any reason.  This license grants you the right
+to make copies of the software which are necessary for your use,
+and your use only, provided each copy incorporates this license.
+
+The programs, procedures, and applications presented in this software
+have been included for their instructional value.  The publisher and
+author offer NO WARRANTY OF FITNESS OR MERCHANTABILITY for any
+particular purpose or accept any liability with respect
+to these programs, procedures, and applications.
+
+If you wish such a licence under these terms, please indicate so
+by signing and dating a copy of this notice and returning it to me
+at John Koza, Box K, Los Altos, California 94023 USA.
+
+I would like the above license and hereby agree to the terms set forth above.
+
+LICENSEE:
+
+NAME (Print) ____________________________
+
+Signature _________________________________
+
+Date _______________
+
+PHYSICAL ADDRESS _______________________________
+
+CITY, STATE, ZIP _______________________________
+
+COUNTRY _____________________________
+
+E-MAIL ADDRESS _______________________________________
+
+PHONE ___________________________

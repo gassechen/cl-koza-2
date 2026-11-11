@@ -1,9 +1,9 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (defparameter *even-5-parity-problem-symbol*
-  'cl-koza-ii.examples.even-5-parity:even-5-parity)
+  'cl-koza-2.examples.even-5-parity:even-5-parity)
 
 (test run-argument-validation
   (with-kernel-defaults

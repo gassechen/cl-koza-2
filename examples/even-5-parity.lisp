@@ -1,13 +1,13 @@
-(defpackage #:cl-koza-ii.examples.even-5-parity
+(defpackage #:cl-koza-2.examples.even-5-parity
   (:use #:cl
-        #:cl-koza-ii)
+        #:cl-koza-2)
   (:export
    #:even-5-parity
    #:run
    #:run-example
    #:verify-known-program))
 
-(in-package #:cl-koza-ii.examples.even-5-parity)
+(in-package #:cl-koza-2.examples.even-5-parity)
 
 (defvar d0)
 (defvar d1)

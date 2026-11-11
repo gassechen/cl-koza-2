@@ -1,4 +1,4 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
 (defmacro with-seed ((seed) &body body)
   `(let ((*seed* (coerce ,seed 'double-float)))
@@ -124,7 +124,7 @@
                         fitness-function
                         parameter-definer
                         termination-predicate)
-      (cl-koza-ii.examples.even-5-parity:even-5-parity)
+      (cl-koza-2.examples.even-5-parity:even-5-parity)
     (declare (ignore adf1-terminal-set-creator
                      fitness-cases-creator
                      fitness-function
@@ -177,7 +177,7 @@
                           fitness-function
                           parameter-definer
                           termination-predicate)
-        (cl-koza-ii.examples.even-5-parity:even-5-parity)
+        (cl-koza-2.examples.even-5-parity:even-5-parity)
       (values adf0-function-set-creator
               adf1-function-set-creator
               rpb-function-set-creator

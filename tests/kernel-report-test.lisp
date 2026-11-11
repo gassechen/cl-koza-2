@@ -1,6 +1,6 @@
-(in-package #:cl-koza-ii.tests)
+(in-package #:cl-koza-2.tests)
 
-(in-suite cl-koza-ii-tests)
+(in-suite cl-koza-2-tests)
 
 (defun make-report-test-population ()
   (let* ((best-program (make-adf-program :adf0 '(and arg0 arg1)
